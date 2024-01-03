@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    tools:context=".PointSelectFragment"
+    android:gravity="center"
+    >
+
+    <Button
+        android:id="@+id/tokyo_button"
+        android:layout_width="300dp"
+        android:layout_height="70dp"
+        android:gravity="center"
+        android:padding="0dp"
+        android:text="東京"
+        />
+    <Button
+        android:id="@+id/hyogo_button"
+        android:layout_width="300dp"
+        android:layout_height="70dp"
+        android:gravity="center"
+        android:padding="0dp"
+        android:text="兵庫"
+        />
+    <Button
+        android:id="@+id/ooita_button"
+        android:layout_width="300dp"
+        android:layout_height="70dp"
+        android:gravity="center"
+        android:padding="0dp"
+        android:text="大分"
+        />
+    <Button
+        android:id="@+id/hokkaido_button"
+        android:layout_width="300dp"
+        android:layout_height="70dp"
+        android:gravity="center"
+        android:padding="0dp"
+        android:text="北海道"
+        />
+    <Button
+        android:id="@+id/current_location_button"
+        android:layout_width="300dp"
+        android:layout_height="70dp"
+        android:gravity="center"
+        android:padding="0dp"
+        android:text="現在地"
+        />
+
+</LinearLayout>
