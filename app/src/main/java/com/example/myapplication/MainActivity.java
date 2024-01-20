@@ -18,22 +18,17 @@ import androidx.fragment.app.FragmentTransaction;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.Objects;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.HashMap;
+import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
 
-    private ExecutorService executor;
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1001;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        executor = Executors.newSingleThreadExecutor();
 
         FragmentManager fragmentManager = getSupportFragmentManager();
         FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
@@ -46,25 +41,37 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (executor != null) {
-            executor.shutdown();
-        }
     }
 
+    //　天気予報結果を表示
     public void showWeatherResult(String point) {
-        String weatherData = getWeatherData(point);
-        if (Objects.equals(weatherData, "") || weatherData == null) {
-            showRetryDialog(point);
+        //　キャッシュを確認
+        String currentDate = getCurrentDate();
+        String cacheKey = "weather_" + point + "_" + currentDate;
+        String cachedData = getFromCache(cacheKey);
+
+        if (cachedData != null && !cachedData.equals("")) {
+            // キャッシュが存在する場合はキャッシュのデータを返す
+            showResultFragment(cachedData);
+            return;
         }
-        FragmentManager fragmentManager = getSupportFragmentManager();
-        FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
-        ShowWeatherFragment showWeatherFragment = new ShowWeatherFragment();
-        Bundle args = new Bundle();
-        args.putString("result", weatherData);
-        showWeatherFragment.setArguments(args);
-        fragmentTransaction.replace(R.id.fragmentContainer, showWeatherFragment, "showWeatherFragment");
-        fragmentTransaction.addToBackStack(null);
-        fragmentTransaction.commit();
+
+        // キャッシュが存在しない場合は通信を行い、結果をキャッシュに保存
+        WeatherApiService weatherApiService = new WeatherApiService(this, 0, 0, point, 1);
+        weatherApiService.makeRequest(new WeatherApiService.VolleyCallback() {
+            @Override
+            public void onSuccess(String result) {
+                // リクエスト成功時の処理
+                saveToCache(cacheKey, result);
+                showResultFragment(result);
+
+            }
+            @Override
+            public void onError(String error) {
+                // リクエストエラーダイアログ表示
+                showRetryDialog(point, 1);
+            }
+        });
     }
 
     // キャッシュを保存するメソッド
@@ -81,48 +88,33 @@ public class MainActivity extends AppCompatActivity {
         return preferences.getString(key, null);
     }
 
-    // 通信を行う前にキャッシュを確認し、同日中のデータであれば通信をスキップ
-    public String getWeatherData(String point) {
-        String currentDate = getCurrentDate();
-        String cacheKey = "weather_" + point + "_" + currentDate;
-
-        // キャッシュからデータを取得
-        String cachedData = getFromCache(cacheKey);
-
-        if (cachedData != null && !cachedData.equals("")) {
-            // キャッシュが存在する場合はキャッシュのデータを返す
-            return cachedData;
-        } else {
-            // キャッシュが存在しない場合は通信を行い、結果をキャッシュに保存
-            Future<String> future = executor.submit(new WeatherApiService(this, point));
-            String result;
-            try {
-                result = future.get();
-            } catch (ExecutionException | InterruptedException e) {
-                // 通信失敗時の処理
-                Log.e("WeatherData", "Communication failed: " + e.getMessage());
-                return null;  // 通信失敗時はここで終了
-            }
-            saveToCache(cacheKey, result);
-            return result;
-        }
+    private void showResultFragment(String weatherData) {
+        FragmentManager fragmentManager = getSupportFragmentManager();
+        FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
+        ShowWeatherFragment showWeatherFragment = new ShowWeatherFragment();
+        Bundle args = new Bundle();
+        args.putString("result", weatherData);
+        showWeatherFragment.setArguments(args);
+        fragmentTransaction.replace(R.id.fragmentContainer, showWeatherFragment, "showWeatherFragment");
+        fragmentTransaction.addToBackStack(null);
+        fragmentTransaction.commit();
     }
 
     // やり直しボタンを表示するメソッド
-    private void showRetryDialog(String point) {
+    private void showRetryDialog(String point, int pointFlag) {
         new AlertDialog.Builder(this)
                 .setTitle("通信に失敗しました。")
                 .setPositiveButton("リトライ", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        showWeatherResult(point);
-                    }
-                })
-                .setNegativeButton("戻る", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        // 戻るボタンが押されたときの処理
-                        onBackPressed();
+                        //  リトライ先を判定
+                        if (pointFlag == 1) {
+                            //　都道府県
+                            showWeatherResult(point);
+                        } else {
+                            //　現在地
+                            showCurrentLocationWeatherResult();
+                        }
                     }
                 })
                 .show();
@@ -135,18 +127,17 @@ public class MainActivity extends AppCompatActivity {
         return currentDate.format(formatter);
     }
 
-    // 位置情報の取得
-    public void requestLocation() {
-        // 位置情報の取得
+    // 位置情報を取得
+    private Map<String, Double> requestLocation() {
+        Map<String, Double> locationMap = new HashMap<>();
         if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED) {
             // パーミッションがある場合は位置情報を取得
             LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
             Location lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
             if (lastKnownLocation != null) {
-                double latitude = lastKnownLocation.getLatitude();
-                double longitude = lastKnownLocation.getLongitude();
-                Log.d("Location", "Latitude: " + latitude + ", Longitude: " + longitude);
+                locationMap.put("latitude", lastKnownLocation.getLatitude());
+                locationMap.put("longitude", lastKnownLocation.getLongitude());
             } else {
                 Log.e("Location", "Last known location is null");
             }
@@ -154,7 +145,37 @@ public class MainActivity extends AppCompatActivity {
             ActivityCompat.requestPermissions(this,
                     new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION},
                     LOCATION_PERMISSION_REQUEST_CODE);
-            Log.e("Location", "Permission denied");
         }
+        return locationMap;
     }
+
+    //　現在地の天気予報を表示
+    public void showCurrentLocationWeatherResult() {
+        Map<String, Double> locationMap = requestLocation();
+
+        //　　位置情報が空の場合
+        if (locationMap.isEmpty()) {
+            return;
+        }
+
+        double latitude = locationMap.get("latitude");
+        double longitude = locationMap.get("longitude");
+
+        WeatherApiService weatherApiService = new WeatherApiService(this, latitude, longitude, null, 0);
+        weatherApiService.makeRequest(new WeatherApiService.VolleyCallback() {
+            @Override
+            public void onSuccess(String result) {
+                // リクエスト成功時の処理
+                showResultFragment(result);
+            }
+
+            @Override
+            public void onError(String error) {
+                // リクエストエラー時の処理
+                showRetryDialog(null, 0);
+            }
+        });
+    }
+
+
 }

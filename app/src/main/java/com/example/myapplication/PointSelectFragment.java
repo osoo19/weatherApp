@@ -72,7 +72,7 @@ public class PointSelectFragment extends Fragment {
         currentLocationButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                ((MainActivity) requireActivity()).requestLocation();
+                ((MainActivity) requireActivity()).showCurrentLocationWeatherResult();
             }
         });
 

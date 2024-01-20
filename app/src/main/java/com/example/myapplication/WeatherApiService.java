@@ -1,66 +1,64 @@
 package com.example.myapplication;
 
 import android.content.Context;
-import android.os.Handler;
-import android.os.Looper;
 import android.util.Log;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
-import java.util.concurrent.Callable;
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.Response;
+import com.android.volley.VolleyError;
+import com.android.volley.toolbox.StringRequest;
+import com.android.volley.toolbox.Volley;
 
-public class WeatherApiService implements Callable<String> {
+public class WeatherApiService {
     private String apiUrl;
-    private String point;
+    private double latitude;
+    private double longitude;
+    private String point; // 都道府県
+    private int pointFlag;  // 0 = 緯度経度で送信, 1 = 都道府県名で送信
     private Context context;
 
-    private Handler uiHandler = new Handler(Looper.getMainLooper());
-
-    public WeatherApiService(Context context, String point) {
-        this.point = point;
-        this.apiUrl = context.getString(R.string.five_day_weather_url);
+    public WeatherApiService(Context context, double latitude, double longitude, String point, int pointFlag) {
         this.context = context;
+        this.latitude = latitude;
+        this.longitude = longitude;
+        this.point = point;
+        this.pointFlag = pointFlag;
+        this.apiUrl = context.getString(R.string.five_day_weather_url);
     }
 
-    @Override
-    public String call() {
-        HttpURLConnection urlConnection;
-        InputStream inputStream;
-        String result;
-        StringBuilder str = new StringBuilder();
-
-        try {
-            // パラメーターをクエリ文字列に追加
-            String fullUrl = apiUrl + "?APPID=" + context.getString(R.string.api_key) + "&q=" + point + "&units=metric&lang=ja";
-            URL url = new URL(fullUrl);
-            urlConnection = (HttpURLConnection) url.openConnection();
-            urlConnection.setConnectTimeout(10000);
-            urlConnection.setReadTimeout(30000);
-            urlConnection.setRequestMethod("GET");
-            urlConnection.setDoInput(true);
-            urlConnection.connect();
-
-            int statusCode = urlConnection.getResponseCode();
-            if (statusCode == 200) {
-
-                inputStream = urlConnection.getInputStream();
-                BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
-                result = bufferedReader.readLine();
-
-                while (result != null) {
-                    str.append(result);
-                    result = bufferedReader.readLine();
-                }
-                bufferedReader.close();
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
+    public void makeRequest(final VolleyCallback callback) {
+        // パラメーターをクエリ文字列に追加
+        String fullUrl;
+        if (pointFlag == 0) {
+            fullUrl = apiUrl + "?APPID=" + context.getString(R.string.api_key) + "&lat=" + latitude + "&lon=" + longitude + "&units=metric&lang=ja";
+        } else {
+            fullUrl = apiUrl + "?APPID=" + context.getString(R.string.api_key) + "&q=" + point + "&units=metric&lang=ja";
         }
-        return str.toString();
+
+        RequestQueue queue = Volley.newRequestQueue(context);
+        StringRequest stringRequest = new StringRequest(Request.Method.GET, fullUrl,
+                new Response.Listener<String>() {
+                    @Override
+                    public void onResponse(String response) {
+                        // 成功
+                        callback.onSuccess(response);
+                    }
+                },
+                new Response.ErrorListener() {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+                        // エラー
+                        callback.onError(error.getMessage());
+                    }
+                });
+
+        // リクエストをキューに追加
+        queue.add(stringRequest);
+    }
+
+    public interface VolleyCallback {
+        void onSuccess(String result);
+        void onError(String error);
     }
 }
