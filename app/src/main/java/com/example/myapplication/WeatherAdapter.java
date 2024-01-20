@@ -53,14 +53,18 @@ public class WeatherAdapter extends BaseAdapter {
             // アイコンが表示される場合
             loadIconWithGlide(iconImageView, iconUrl);
             iconImageView.setVisibility(View.VISIBLE);
+
+            TextView textView = convertView.findViewById(R.id.textView);
+            textView.setText("");
         } else {
             // アイコンが表示されない場合
             iconImageView.setVisibility(View.GONE);
+            // その他のデータの表示
+            TextView textView = convertView.findViewById(R.id.textView);
+            textView.setText(weatherData[position]);
         }
 
-        // その他のデータの表示
-        TextView textView = convertView.findViewById(R.id.textView);
-        textView.setText(weatherData[position]);
+
 
         return convertView;
     }
