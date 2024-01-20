@@ -1,25 +1,24 @@
 package com.example.myapplication;
 
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-import androidx.fragment.app.FragmentManager;
-import androidx.fragment.app.FragmentTransaction;
-
-import android.widget.FrameLayout;
-import android.view.View;
-
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationManager;
 import android.os.Bundle;
 import android.util.Log;
-import android.widget.Button;
+
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import androidx.fragment.app.FragmentManager;
+import androidx.fragment.app.FragmentTransaction;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -29,15 +28,12 @@ public class MainActivity extends AppCompatActivity {
 
     private ExecutorService executor;
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1001;
-    private FrameLayout layout;
-    private Button retryButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         executor = Executors.newSingleThreadExecutor();
-        layout = findViewById(R.id.fragmentContainer);
 
         FragmentManager fragmentManager = getSupportFragmentManager();
         FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
@@ -57,8 +53,8 @@ public class MainActivity extends AppCompatActivity {
 
     public void showWeatherResult(String point) {
         String weatherData = getWeatherData(point);
-        if (weatherData == null) {
-            return;
+        if (Objects.equals(weatherData, "") || weatherData == null) {
+            showRetryDialog(point);
         }
         FragmentManager fragmentManager = getSupportFragmentManager();
         FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
@@ -93,13 +89,13 @@ public class MainActivity extends AppCompatActivity {
         // キャッシュからデータを取得
         String cachedData = getFromCache(cacheKey);
 
-        if (cachedData != null) {
+        if (cachedData != null && !cachedData.equals("")) {
             // キャッシュが存在する場合はキャッシュのデータを返す
             return cachedData;
         } else {
             // キャッシュが存在しない場合は通信を行い、結果をキャッシュに保存
             Future<String> future = executor.submit(new WeatherApiService(this, point));
-            String result = null;
+            String result;
             try {
                 result = future.get();
             } catch (ExecutionException | InterruptedException e) {
@@ -113,13 +109,23 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // やり直しボタンを表示するメソッド
-    private void showRetryButton(String point) {
-        retryButton.setVisibility(View.VISIBLE); // ボタンを表示する
-        // ボタンが押されたときの処理
-        retryButton.setOnClickListener(v -> {
-            // 通信を再試行するなどの処理
-            showWeatherResult(point);
-        });
+    private void showRetryDialog(String point) {
+        new AlertDialog.Builder(this)
+                .setTitle("通信に失敗しました。")
+                .setPositiveButton("リトライ", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        showWeatherResult(point);
+                    }
+                })
+                .setNegativeButton("戻る", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        // 戻るボタンが押されたときの処理
+                        onBackPressed();
+                    }
+                })
+                .show();
     }
 
     // 現在の日付を取得するメソッド
